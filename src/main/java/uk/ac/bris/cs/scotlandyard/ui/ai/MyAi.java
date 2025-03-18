@@ -133,6 +133,7 @@ public class MyAi implements Ai {
 	private ImmutableValueGraph<Integer, Integer> Score(ImmutableValueGraph<Integer, Integer> graph) {
 		// go through graph
 		// apply fn exagerate(distance) -> score; 
+		// could do page rank
 		// return graph
 		return null;
 	}
