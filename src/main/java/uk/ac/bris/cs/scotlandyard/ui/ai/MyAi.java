@@ -31,11 +31,6 @@ public class MyAi implements Ai {
 
 		/*
 		 * Move that increases the moves required by all detectives (moves count now quantified)
-		*/
-		// Greedy algorithm
-
-		/*
-		 * Move that increases the moves required by all detectives (moves count now quantified)
 		 */
 
 		// assume detectives will play a move that approaches mrx (hold all positions that put det equally close to mrx)
@@ -136,7 +131,7 @@ public class MyAi implements Ai {
 				bestScore = score.get();
 			}
 		}
-		
+
 		return bestMove;
 	}
 
