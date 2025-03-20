@@ -7,16 +7,12 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nonnull;
 import com.google.common.graph.ImmutableGraph;
-import com.google.common.graph.ImmutableValueGraph;
 import com.google.common.graph.MutableValueGraph;
 import com.google.common.graph.ValueGraphBuilder;
 import io.atlassian.fugue.Pair;
 import uk.ac.bris.cs.scotlandyard.model.Ai;
 import uk.ac.bris.cs.scotlandyard.model.Board;
 import uk.ac.bris.cs.scotlandyard.model.Move;
-import java.util.*;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.graph.*;
 import uk.ac.bris.cs.scotlandyard.model.*;
 
 public class MyAi implements Ai {
@@ -66,69 +62,45 @@ public class MyAi implements Ai {
 		// } */
 
 
-		Dijkstras(board.getDetectiveLocation(null).get(), board.getSetup().graph.asGraph());
-
-		List<Move> moves = board.getAvailableMoves().asList();
-		ImmutableValueGraph<Integer, ImmutableSet<ScotlandYard.Transport>> new_graph = board.getSetup().graph;
-		ImmutableSet<Piece> players = board.getPlayers();
-		ArrayList<Move> mrxMoves = new ArrayList<>();
-		Move.FunctionalVisitor<Integer> v = new Move.FunctionalVisitor<>(m -> m.destination, m -> m.destination2);
-
-		for (Move move : moves) {
-			if (move.commencedBy().isMrX()) {
-				mrxMoves.add(move);
-			}
-		}
-
+		//Dijkstras(board.getDetectiveLocation(null).get(), board.getSetup().graph.asGraph());
+		
 		// go to a node in the graph
 		// find this node in all players graphs, where the player's graphs' nodes are scored based on distance to mrX, and get the score.
 		// score graph edges:  source = location, target = score
 		// sum the scores
-
-		double totalScore = 0;
-		Set<Integer> nodes = new_graph.nodes();
-
-		for (Integer node : nodes) {
-			for (Piece player : players) {
-				if (player.isDetective()) {
-					// get distances between detective and mrX
-					ImmutableValueGraph<Integer, Integer> distances = Dijkstras(board.getDetectiveLocation((Piece.Detective)player).get(), new_graph.asGraph());
-					// add score for the matched node
-					for (EndpointPair<Integer> pair : Score(distances).edges()) {
-						if(pair.source().equals(node)) {
-							totalScore += pair.target();
-							break;
-						}
-					}
-				}
+		
+		List<List<Node>> detectiveGraphs = new ArrayList<>();
+		for (Piece player : board.getPlayers()) {
+			if (player.isDetective()) {
+				// create thread:
+				List<Node> distances = Dijkstras(board.getDetectiveLocation((Piece.Detective)player).get(), board.getSetup().graph.asGraph());
+				detectiveGraphs.add(Score(distances));
 			}
 		}
+		
+		MutableValueGraph<Integer, Double> sumGraph = ValueGraphBuilder.undirected().build();
+		for (List<Node> graph : detectiveGraphs) {
+			for (Node n : graph) {
+				sumGraph.addNode(n.location);
+				sumGraph.addNode(n.from);
 
-		int bestScore = 0;
+				Double current = sumGraph.edgeValue(n.from, n.location).orElse(0.0);
+
+				sumGraph.putEdgeValue(n.from, n.location, n.distance + current);
+			}
+		}
+		
+		Move.FunctionalVisitor<Integer> v = new Move.FunctionalVisitor<>(m -> m.destination, m -> m.destination2);
+
+		Double bestScore = 0.0;
 		Move bestMove = null;
-
-		MutableValueGraph<Integer, Integer> b = ValueGraphBuilder.undirected().build();
-		for (Integer node : new_graph.nodes()) {
-
-			if (!new_graph.nodes().contains(node)) {
-				b.addNode(node);
-			}
-
-			Set<Integer> neighbors = new_graph.adjacentNodes(node);
-			for (Integer n : neighbors) {
-
-				if (!new_graph.nodes().contains(n)) {
-					b.addNode(n);
+		for (Move move : board.getAvailableMoves()) {
+			if (move.commencedBy().isMrX()) {
+				Double score = sumGraph.edgeValue(move.accept(v), move.source()).get();
+				if (score > bestScore) {
+					bestMove = move;
+					bestScore = score;
 				}
-				b.putEdgeValue(node, n, 0);
-			}
-		}
-
-		for (Move move : mrxMoves) {
-			Optional<Integer> score = b.edgeValue(move.accept(v), move.source());
-			if (score.isPresent() && score.get() > bestScore) {
-				bestMove = move;
-				bestScore = score.get();
 			}
 		}
 
@@ -139,19 +111,19 @@ public class MyAi implements Ai {
 	 * <p>assume distance between nodes are never Integer.MAX_VALUE</p>
 	 * @return <b>Node : Distance</b>
 	 */
-	private ImmutableValueGraph<Integer, Integer> Dijkstras(Integer detectiveLocation, ImmutableGraph<Integer> graph) {
+	private List<Node> Dijkstras(Integer detectiveLocation, ImmutableGraph<Integer> graph) {
 		List<Node> visited = new ArrayList<>();
 		Set<Integer> visitedLocation = new HashSet<>();
 
-		visited.add(new Node(null, detectiveLocation, 0));
+		visited.add(new Node(null, detectiveLocation, 0.0));
 		visitedLocation.add(detectiveLocation);
 
 		Integer minimumFrom = null;
 		Integer minimumNode = null;
-		Integer minimumDistance = null;
+		Double minimumDistance = null;
 
 		while (minimumDistance != Integer.MAX_VALUE) {
-			minimumDistance = Integer.MAX_VALUE;
+			minimumDistance = Double.MAX_VALUE;
 
 			for (Node visitedNode : visited) {
 				for (Integer connection : graph.adjacentNodes(visitedNode.location)) {
@@ -173,33 +145,30 @@ public class MyAi implements Ai {
 		}
 
 		visited.remove(visited.size() - 1);
-
-		MutableValueGraph<Integer, Integer> newGraph = ValueGraphBuilder.undirected().build();
-
-		for (Node n : visited) {
-			newGraph.addNode(n.from);
-			newGraph.addNode(n.location);
-			newGraph.putEdgeValue(n.from, n.location, n.distance);
-		}
-
-		return ImmutableValueGraph.copyOf(newGraph);
+		
+		return visited;
 	}
 
-	private ImmutableValueGraph<Integer, Integer> Score(ImmutableValueGraph<Integer, Integer> graph) {
-		// go through graph
-		// apply fn exagerate(distance) -> score;
-		// could do page rank
-		// return graph
-		return null;
+	private List<Node> Score(List<Node> graph) {
+		for (Node n : graph) {
+			n.distance = ScoreDistance(n.distance);
+		}
+
+		return graph;
+		// later can do page rank algorithm
+	}
+
+	private double ScoreDistance(Double distance) {
+			return Math.exp((double) distance);
 	}
 }
 
 class Node {
 	Integer from;
 	Integer location;
-	Integer distance;
+	Double distance;
 
-	Node(Integer from, Integer location, Integer distance) {
+	Node(Integer from, Integer location, Double distance) {
 		this.from = from;
 		this.location = location;
 		this.distance = distance;
