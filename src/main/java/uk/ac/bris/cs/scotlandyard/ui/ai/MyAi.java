@@ -7,7 +7,6 @@ import com.google.common.graph.ImmutableGraph;
 import com.google.common.graph.MutableValueGraph;
 import com.google.common.graph.ValueGraphBuilder;
 import io.atlassian.fugue.Pair;
-import net.bytebuddy.asm.Advice;
 import uk.ac.bris.cs.scotlandyard.model.Ai;
 import uk.ac.bris.cs.scotlandyard.model.Board;
 import uk.ac.bris.cs.scotlandyard.model.Move;
@@ -20,7 +19,6 @@ public class MyAi implements Ai {
 	@Nonnull @Override public Move pickMove(
 			@Nonnull Board board,
 			Pair<Long, TimeUnit> timeoutPair) {
-		// returns a random move, replace with your own implementation
 		// Greedy algorithm
 
 		/*
@@ -70,13 +68,9 @@ public class MyAi implements Ai {
 		List<List<Node>> detectiveGraphs = new ArrayList<>();
 		for (Piece player : board.getPlayers()) {
 			if (player.isDetective()) {
-				// create thread:
+				// create thread:                   ?????????????????????????????????????????????
 
 				List<Node> distances = Dijkstras(board.getDetectiveLocation((Piece.Detective)player).get(), board.getSetup().graph.asGraph());
-				/*for (Node node : distances) {
-					System.out.println(node.location);
-				}*/
-
 				detectiveGraphs.add(Score(distances));
 			}
 		}
@@ -91,33 +85,23 @@ public class MyAi implements Ai {
 				sumGraph.addNode(n.location);
 				sumGraph.addNode(n.from);
 
-				System.out.println(n.location);
-				System.out.println(n.from);
-
-
-				//Double current = sumGraph.edgeValue(n.from, n.location).orElse(0.0);
-
 				Double current = sumGraph.edgeValue(n.from, n.location).orElse(0.0);
-				//if (n.distance < ScoreDistance(3.0)) {
-					//sumGraph.putEdgeValue(n.from, n.location, Double.NEGATIVE_INFINITY);
-				//}
 				sumGraph.putEdgeValue(n.from, n.location, n.distance + current);
 			}
 		}
 
-		//System.out.println(sumGraph);
-		
+		// Visitor for accessing a move's destination
 		Move.FunctionalVisitor<Integer> v = new Move.FunctionalVisitor<>(m -> m.destination, m -> m.destination2);
 
+
 		Double bestScore = Double.NEGATIVE_INFINITY;
+		// Track the best move to perform, should not be null on return as Mr X would have lost already
 		Move bestMove = null;
-		Move fallbackMove = null; // if he gets stuck with no good moves
+		// Track the least bad move in the unlikely event that no best move is found
+		Move fallbackMove = null;
 
 		for (Move move : board.getAvailableMoves()) {
 			if (move.commencedBy().isMrX()) {
-				//System.out.println(move.accept(v));
-				//System.out.println(move.source());
-
 				// avoid losing in 1
 
 				boolean canBeCaptured = detectiveCanReach(move.accept(v), detectiveGraphs);
@@ -135,9 +119,6 @@ public class MyAi implements Ai {
 				if (optionalScore.isEmpty()) {
 					continue;
 				}
-				//System.out.println(score.get());
-				//System.out.println(move.accept(v));
-				//System.out.println(move.source());
 
 				double score = optionalScore.orElse(0.0) + (escapeRoutes * 0.5);
 
@@ -205,12 +186,10 @@ public class MyAi implements Ai {
 		}
 
 		return graph;
-		// later can do page rank algorithm
 	}
 
 	// Applies weighting to distance
 	private double ScoreDistance(Double distance) {
-
 		// inverse square
 		return 1.0 / ((distance + 1) * (distance + 1));
 	}
