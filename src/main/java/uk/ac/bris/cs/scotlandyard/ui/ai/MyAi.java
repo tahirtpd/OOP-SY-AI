@@ -1,15 +1,13 @@
 package uk.ac.bris.cs.scotlandyard.ui.ai;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nonnull;
 import com.google.common.graph.ImmutableGraph;
 import com.google.common.graph.MutableValueGraph;
 import com.google.common.graph.ValueGraphBuilder;
 import io.atlassian.fugue.Pair;
+import net.bytebuddy.asm.Advice;
 import uk.ac.bris.cs.scotlandyard.model.Ai;
 import uk.ac.bris.cs.scotlandyard.model.Board;
 import uk.ac.bris.cs.scotlandyard.model.Move;
@@ -73,7 +71,12 @@ public class MyAi implements Ai {
 		for (Piece player : board.getPlayers()) {
 			if (player.isDetective()) {
 				// create thread:
+
 				List<Node> distances = Dijkstras(board.getDetectiveLocation((Piece.Detective)player).get(), board.getSetup().graph.asGraph());
+				/*for (Node node : distances) {
+					System.out.println(node.location);
+				}*/
+
 				detectiveGraphs.add(Score(distances));
 			}
 		}
@@ -81,22 +84,63 @@ public class MyAi implements Ai {
 		MutableValueGraph<Integer, Double> sumGraph = ValueGraphBuilder.undirected().build();
 		for (List<Node> graph : detectiveGraphs) {
 			for (Node n : graph) {
+				if (n.from == null) {
+					continue;
+				}
+
 				sumGraph.addNode(n.location);
 				sumGraph.addNode(n.from);
 
-				Double current = sumGraph.edgeValue(n.from, n.location).orElse(0.0);
+				System.out.println(n.location);
+				System.out.println(n.from);
 
+
+				//Double current = sumGraph.edgeValue(n.from, n.location).orElse(0.0);
+
+				Double current = sumGraph.edgeValue(n.from, n.location).orElse(0.0);
+				//if (n.distance < ScoreDistance(3.0)) {
+					//sumGraph.putEdgeValue(n.from, n.location, Double.NEGATIVE_INFINITY);
+				//}
 				sumGraph.putEdgeValue(n.from, n.location, n.distance + current);
 			}
 		}
+
+		//System.out.println(sumGraph);
 		
 		Move.FunctionalVisitor<Integer> v = new Move.FunctionalVisitor<>(m -> m.destination, m -> m.destination2);
 
-		Double bestScore = 0.0;
+		Double bestScore = Double.NEGATIVE_INFINITY;
 		Move bestMove = null;
+		Move fallbackMove = null; // if he gets stuck with no good moves
+
 		for (Move move : board.getAvailableMoves()) {
 			if (move.commencedBy().isMrX()) {
-				Double score = sumGraph.edgeValue(move.accept(v), move.source()).get();
+				//System.out.println(move.accept(v));
+				//System.out.println(move.source());
+
+				// avoid losing in 1
+
+				boolean canBeCaptured = detectiveCanReach(move.accept(v), detectiveGraphs);
+				if (canBeCaptured && fallbackMove == null) {
+					fallbackMove = move;
+				}
+
+				if (canBeCaptured) continue;
+
+				// greater weighting on nodes with more open routes
+				int escapeRoutes = board.getSetup().graph.adjacentNodes(move.accept(v)).size();
+
+				Optional<Double> optionalScore = sumGraph.edgeValue(move.accept(v), move.source());
+
+				if (optionalScore.isEmpty()) {
+					continue;
+				}
+				//System.out.println(score.get());
+				//System.out.println(move.accept(v));
+				//System.out.println(move.source());
+
+				double score = optionalScore.orElse(0.0) + (escapeRoutes * 0.5);
+
 				if (score > bestScore) {
 					bestMove = move;
 					bestScore = score;
@@ -104,7 +148,12 @@ public class MyAi implements Ai {
 			}
 		}
 
-		return bestMove;
+		if (bestMove == null) {
+            return fallbackMove;
+		}
+		else {
+			return bestMove;
+		}
 	}
 
 	/**
@@ -120,9 +169,9 @@ public class MyAi implements Ai {
 
 		Integer minimumFrom = null;
 		Integer minimumNode = null;
-		Double minimumDistance = null;
+		Double minimumDistance = 0.0;
 
-		while (minimumDistance != Integer.MAX_VALUE) {
+		while (minimumDistance != Double.MAX_VALUE) {
 			minimumDistance = Double.MAX_VALUE;
 
 			for (Node visitedNode : visited) {
@@ -151,6 +200,7 @@ public class MyAi implements Ai {
 
 	private List<Node> Score(List<Node> graph) {
 		for (Node n : graph) {
+			System.out.println(n.distance);
 			n.distance = ScoreDistance(n.distance);
 		}
 
@@ -158,8 +208,23 @@ public class MyAi implements Ai {
 		// later can do page rank algorithm
 	}
 
+	// Applies weighting to distance
 	private double ScoreDistance(Double distance) {
-			return Math.exp((double) distance);
+
+		// inverse square
+		return 1.0 / ((distance + 1) * (distance + 1));
+	}
+
+	// Check if a detective can reach a given position in one move
+	private boolean detectiveCanReach(int position, List<List<Node>> detectiveGraphs) {
+		for (List<Node> graph : detectiveGraphs) {
+			for (Node node : graph) {
+				if (node.location == position && node.distance <= 1.0) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 }
 
