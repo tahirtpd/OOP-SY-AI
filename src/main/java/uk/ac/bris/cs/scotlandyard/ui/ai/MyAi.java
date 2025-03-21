@@ -19,7 +19,8 @@ public class MyAi implements Ai {
 	@Nonnull @Override public Move pickMove(
 			@Nonnull Board board,
 			Pair<Long, TimeUnit> timeoutPair) {
-
+				// Through testing we determined not necessary to account for time
+		// Create graphs for each detective on the distance to them respectively
 		List<List<Node>> detectiveGraphs = new ArrayList<>();
 		for (Piece player : board.getPlayers()) {
 			if (player.isDetective()) {
@@ -28,6 +29,7 @@ public class MyAi implements Ai {
 			}
 		}
 		
+		// Combine graphs
 		MutableValueGraph<Integer, Double> sumGraph = ValueGraphBuilder.undirected().build();
 		for (List<Node> graph : detectiveGraphs) {
 			for (Node n : graph) {
@@ -48,20 +50,13 @@ public class MyAi implements Ai {
 
 		Double bestScore = Double.NEGATIVE_INFINITY;
 
-		// Track the best move to perform, should not be null on return as Mr X would have lost already
+		// Track the best move to perform
 		Move bestMove = null;
-
-		// Track the least bad move in the unlikely event that no best move is found
-		Move fallbackMove = null;
-
 		for (Move move : board.getAvailableMoves()) {
 			if (move.commencedBy().isMrX()) {
 
 				// Avoids losing in one move
 				boolean canBeCaptured = detectiveCanReach(move.accept(v), detectiveGraphs);
-				if (canBeCaptured && fallbackMove == null) {
-					fallbackMove = move;
-				}
 				if (canBeCaptured) continue;
 
 				// Preference on moves with more open routes
@@ -82,20 +77,8 @@ public class MyAi implements Ai {
 			}
 		}
 
-		if (bestMove == null) {
-			// Failsafe 1 - return an okay move
-			if (fallbackMove != null) {
-				return fallbackMove;
-			}
-			else {
-				// Failsafe 2 - return random move
-				List<Move> moves = board.getAvailableMoves().asList();
-				return moves.get(new Random().nextInt(moves.size()));
-			}
-		}
-		else {
-			return bestMove;
-		}
+		// never null on return because if mrx had no moves he would have lost
+		return bestMove;
 	}
 
 	/**
@@ -105,26 +88,29 @@ public class MyAi implements Ai {
 	 */
 	private List<Node> Dijkstras(Integer detectiveLocation, ImmutableGraph<Integer> graph) {
 		List<Node> visited = new ArrayList<>();
-		Set<Integer> visitedLocation = new HashSet<>();
+		Set<Integer> visitedLocation = new HashSet<>(); // for performance
 
 		visited.add(new Node(null, detectiveLocation, 0.0));
-		visitedLocation.add(detectiveLocation);
+		visitedLocation.add(detectiveLocation); 
 
 		Integer minimumFrom = null;
 		Integer minimumNode = null;
 		Double minimumDistance = 0.0;
 
 		while (minimumDistance != Double.MAX_VALUE) {
+			// assume next node is infinitely far away
 			minimumDistance = Double.MAX_VALUE;
 
 			for (Node visitedNode : visited) {
 				for (Integer connection : graph.adjacentNodes(visitedNode.location)) {
+					// skip if node has already been found/ considered
 					if (visitedLocation.contains(connection)) {
 						continue;
 					}
 
-					// cost of edge is 1
+					// track the node which has the lowest distance to next be "visited"
 					if (1 + visitedNode.distance < minimumDistance) {
+						// cost of edge is 1
 						minimumDistance = 1 + visitedNode.distance;
 						minimumFrom = visitedNode.location;
 						minimumNode = connection;
@@ -136,6 +122,7 @@ public class MyAi implements Ai {
 			visitedLocation.add(minimumNode);
 		}
 
+		// since in the loop the last node will be null
 		visited.remove(visited.size() - 1);
 		
 		return visited;
