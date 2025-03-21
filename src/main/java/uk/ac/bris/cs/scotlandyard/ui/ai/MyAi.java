@@ -54,6 +54,11 @@ public class MyAi implements Ai {
 		Move bestMove = null;
 		for (Move move : board.getAvailableMoves()) {
 			if (move.commencedBy().isMrX()) {
+
+				// Avoids losing in one move
+				boolean canBeCaptured = detectiveCanReach(move.accept(v), detectiveGraphs);
+				if (canBeCaptured) continue;
+
 				// Preference on moves with more open routes
 				int escapeRoutes = board.getSetup().graph.adjacentNodes(move.accept(v)).size();
 
@@ -72,8 +77,15 @@ public class MyAi implements Ai {
 			}
 		}
 
-		// never null on return because if mrx had no moves he would have lost
-		return bestMove;
+		// Returns a random move if bestMove is null
+		// Due to all moves resulting in a loss
+		if (bestMove == null) {
+			var moves = board.getAvailableMoves().asList();
+			return moves.get(new Random().nextInt(moves.size()));
+		}
+		else {
+			return bestMove;
+		}
 	}
 
 	/**
@@ -142,11 +154,27 @@ public class MyAi implements Ai {
 		// inverse square
 		return 1.0 / ((distance + 1) * (distance + 1));
 	}
+
+	//
+
+	/**
+	 * <p>Checks if a detective can reach a given position in one move</p>
+	 * @return <b>Boolean : Detective wins</b>
+	 */
+	private boolean detectiveCanReach(int position, List<List<Node>> detectiveGraphs) {
+		for (List<Node> graph : detectiveGraphs) {
+			for (Node node : graph) {
+				if (node.location == position && node.distance <= 1.0) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
 }
 
 /**
- * Class that provides edges between nodes and their distances
- * Mainly for use in Dijkstra's
+ * Class that provides connections between nodes and their distances
  */
 class Node {
 	Integer from;
@@ -160,7 +188,7 @@ class Node {
 	}
 }
 
-// Initial thoughts
+// Initial thoughts:
 // Greedy algorithm
 
 // assume detectives will play a move that approaches mrx (hold all positions that put det equally close to mrx)
