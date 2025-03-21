@@ -19,57 +19,10 @@ public class MyAi implements Ai {
 	@Nonnull @Override public Move pickMove(
 			@Nonnull Board board,
 			Pair<Long, TimeUnit> timeoutPair) {
-		// Greedy algorithm
 
-		/*
-		 * Move that increases the moves required by all detectives (moves count now quantified)
-		 */
-
-		// assume detectives will play a move that approaches mrx (hold all positions that put det equally close to mrx)
-		// assume detectives && mrx have unlimited tickets
-		// find new locaiton of all dets
-		// parallel
-		// for each detective:
-			// do dijkstra's on all nodes on graph.
-			// second pass: go over each node in new graph (node: distance)
-			// // multiply distance with detective weight for new "score"
-			// pass the distance itself into fn: e^d (optional: for each node connecting to itself, sum the connections of these nodes and add to total score)
-		// do dijkstra's on all nodes on graph.
-		// second pass: go over each node in new graph (node: distance)
-		// // multiply distance with detective weight for new "score"
-		// pass the distance itself into fn: e^d (optional: for each node connecting to itself, sum the connections of these nodes and add to total score)
-
-		// for each graph:
-		// for each of identical nodes:
-		// sum the "score"
-		//
-		// for each move of detective's
-		// find the score in the new single graph
-		// find move with max score
-		// return move
-
-		// let mut graphs = vec![];
-		// for (Piece plr : board.getPlayers()) {
-		// 	if (plr.isDetective()) {
-		// 		let graph = Dijkstras(board.getDetectiveLocation((Detective) plr).get(), board.getSetup().graph);
-		// 		let graph = score(graph);
-		// 		graphs.push(graph);
-		// 	}
-		// } */
-
-
-		//Dijkstras(board.getDetectiveLocation(null).get(), board.getSetup().graph.asGraph());
-		
-		// go to a node in the graph
-		// find this node in all players graphs, where the player's graphs' nodes are scored based on distance to mrX, and get the score.
-		// score graph edges:  source = location, target = score
-		// sum the scores
-		
 		List<List<Node>> detectiveGraphs = new ArrayList<>();
 		for (Piece player : board.getPlayers()) {
 			if (player.isDetective()) {
-				// create thread:                   ?????????????????????????????????????????????
-
 				List<Node> distances = Dijkstras(board.getDetectiveLocation((Piece.Detective)player).get(), board.getSetup().graph.asGraph());
 				detectiveGraphs.add(Score(distances));
 			}
@@ -93,35 +46,35 @@ public class MyAi implements Ai {
 		// Visitor for accessing a move's destination
 		Move.FunctionalVisitor<Integer> v = new Move.FunctionalVisitor<>(m -> m.destination, m -> m.destination2);
 
-
 		Double bestScore = Double.NEGATIVE_INFINITY;
+
 		// Track the best move to perform, should not be null on return as Mr X would have lost already
 		Move bestMove = null;
+
 		// Track the least bad move in the unlikely event that no best move is found
 		Move fallbackMove = null;
 
 		for (Move move : board.getAvailableMoves()) {
 			if (move.commencedBy().isMrX()) {
-				// avoid losing in 1
 
+				// Avoids losing in one move
 				boolean canBeCaptured = detectiveCanReach(move.accept(v), detectiveGraphs);
 				if (canBeCaptured && fallbackMove == null) {
 					fallbackMove = move;
 				}
-
 				if (canBeCaptured) continue;
 
-				// greater weighting on nodes with more open routes
+				// Preference on moves with more open routes
 				int escapeRoutes = board.getSetup().graph.adjacentNodes(move.accept(v)).size();
 
 				Optional<Double> optionalScore = sumGraph.edgeValue(move.accept(v), move.source());
-
-				if (optionalScore.isEmpty()) {
-					continue;
-				}
+				// Verify optionalScore exists
+				if (optionalScore.isEmpty()) continue;
 
 				double score = optionalScore.orElse(0.0) + (escapeRoutes * 0.5);
 
+				// Update bestMove and bestScore when a better move is found
+				// Exits loop with the best move
 				if (score > bestScore) {
 					bestMove = move;
 					bestScore = score;
@@ -130,7 +83,15 @@ public class MyAi implements Ai {
 		}
 
 		if (bestMove == null) {
-            return fallbackMove;
+			// Failsafe 1 - return an okay move
+			if (fallbackMove != null) {
+				return fallbackMove;
+			}
+			else {
+				// Failsafe 2 - return random move
+				List<Move> moves = board.getAvailableMoves().asList();
+				return moves.get(new Random().nextInt(moves.size()));
+			}
 		}
 		else {
 			return bestMove;
@@ -138,7 +99,8 @@ public class MyAi implements Ai {
 	}
 
 	/**
-	 * <p>assume distance between nodes are never Integer.MAX_VALUE</p>
+	 * <p>Performs Dijkstra's shortest path algorithm to a graph</p>
+	 * <p>Assume distance between nodes are never Double.MAX_VALUE</p>
 	 * @return <b>Node : Distance</b>
 	 */
 	private List<Node> Dijkstras(Integer detectiveLocation, ImmutableGraph<Integer> graph) {
@@ -179,16 +141,21 @@ public class MyAi implements Ai {
 		return visited;
 	}
 
+	/**
+	 * <p>Applies weighted distance to a graph</p>
+	 * @return <b>Weighted graph</b>
+	 */
 	private List<Node> Score(List<Node> graph) {
 		for (Node n : graph) {
-			System.out.println(n.distance);
 			n.distance = ScoreDistance(n.distance);
 		}
-
 		return graph;
 	}
 
-	// Applies weighting to distance
+	/**
+	 * <p>Applies weighting to a given distance</p>
+	 * @return <b>Distance</b>
+	 */
 	private double ScoreDistance(Double distance) {
 		// inverse square
 		return 1.0 / ((distance + 1) * (distance + 1));
@@ -207,6 +174,9 @@ public class MyAi implements Ai {
 	}
 }
 
+/**
+ * Node class
+ */
 class Node {
 	Integer from;
 	Integer location;
@@ -218,3 +188,15 @@ class Node {
 		this.distance = distance;
 	}
 }
+
+// Initial thoughts
+// Greedy algorithm
+
+// assume detectives will play a move that approaches mrx (hold all positions that put det equally close to mrx)
+// assume detectives && mrx have unlimited tickets
+// find new locaiton of all dets
+// for each detective:
+// do dijkstra's on all nodes on graph.
+// second pass: go over each node in new graph (node: distance)
+// multiply distance with detective weight for new "score"
+// pass the distance itself into fn to weight nearer dets greater
