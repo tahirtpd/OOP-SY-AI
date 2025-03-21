@@ -54,11 +54,6 @@ public class MyAi implements Ai {
 		Move bestMove = null;
 		for (Move move : board.getAvailableMoves()) {
 			if (move.commencedBy().isMrX()) {
-
-				// Avoids losing in one move
-				boolean canBeCaptured = detectiveCanReach(move.accept(v), detectiveGraphs);
-				if (canBeCaptured) continue;
-
 				// Preference on moves with more open routes
 				int escapeRoutes = board.getSetup().graph.adjacentNodes(move.accept(v)).size();
 
@@ -147,22 +142,11 @@ public class MyAi implements Ai {
 		// inverse square
 		return 1.0 / ((distance + 1) * (distance + 1));
 	}
-
-	// Check if a detective can reach a given position in one move
-	private boolean detectiveCanReach(int position, List<List<Node>> detectiveGraphs) {
-		for (List<Node> graph : detectiveGraphs) {
-			for (Node node : graph) {
-				if (node.location == position && node.distance <= 1.0) {
-					return true;
-				}
-			}
-		}
-		return false;
-	}
 }
 
 /**
- * Node class
+ * Class that provides edges between nodes and their distances
+ * Mainly for use in Dijkstra's
  */
 class Node {
 	Integer from;
